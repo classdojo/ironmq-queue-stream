@@ -9,7 +9,8 @@
     "iron_mq": "0.2.0",
     "lodash": "2.3.0",
     "debug": "0.7.3",
-    "through": "2.3.4"
+    "through": "2.3.4",
+    "easy-stream": ""
   },
   "devDependencies": {
     "expect.js": "0.2.0",

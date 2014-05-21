@@ -2,12 +2,11 @@ var expect = require("expect.js");
 var IronStream = require("./").IronStream;
 var Stub = require("./ironmqstub");
 
-describe("IronStream", function(done) {
+describe("IronStream", function() {
   var projectId = "SomeProjectId";
   var projectToken = "SomeProjectToken";
-
+  var iron;
   describe("#constructor", function() {
-    var iron;
     it("should require an arity of two", function(done) {
       try {
         iron = new IronStream("");
@@ -32,5 +31,21 @@ describe("IronStream", function(done) {
   });
 
   describe("#queue", function() {
+    before(function() {
+      iron = new IronStream(projectId, projectToken);
+    });
+
   });
+});
+
+describe("Queue", function() {
+  describe("#_read", function() {
+  });
+
+  describe("#resume", function() {
+  });
+
+  describe("#stop", function() {
+  });
+
 });
