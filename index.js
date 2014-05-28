@@ -18,7 +18,10 @@ function IronStream(projectId, projectToken) {
 }
 
 /*
- *
+ * @param name {String}: Name of the queue to connect to
+ * @param options {Object}:
+          options.checkEvery {Num} - Interval with which to check ironMQ in ms.
+          options.maxMessagesPerEvent {Num} - The maximum number of messages to return in any given push.
 */
 
 
@@ -55,7 +58,7 @@ Queue.prototype._read = function() {
       });
     }, this.options.checkEvery);
   }
-  if(this.mesages.length) {
+  if(this.messages.length) {
     if(!this.push(this.messages)) {
       this.pause();
       /* 
@@ -94,9 +97,6 @@ Queue.prototype.pause = function() {
 Queue.prototype.resetMessages = function() {
   this.messages = [];
 };
-
-
-util.inherits(Queue, EventEmitter);
 
 exports.IronStream = IronStream;
 exports.Queue = Queue;
