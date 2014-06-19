@@ -14,10 +14,10 @@ IronStream = require("ironmq-queue-stream");
 var iron = new IronStream("projectId", "projectToken");
 
 //initialize a queue for that stream to pull from
-iron.queue("someMessageQueue");
+var someQueueStream = iron.queue("someQueue");
 
 //pipe that stream to something useful
-iron.pipe(someOtherStream);
+someQueueStream.pipe(someOtherStream);
 
 /*
   The output of iron stream is the raw json pulled from the iron queue.
@@ -40,7 +40,7 @@ iron.pipe(someOtherStream);
   parsing error.
 */
 
-var parsedStream = IronStream.parseJson(iron, function(err, message) {
+var parsedStream = IronStream.parseJson(queueStream, function(err, message) {
   console.error(err + " for message " + message);
 });
 
@@ -65,8 +65,7 @@ parsedStream.pipe(someOtherStream);
 */
 var Sink = require("iron-stream").Sink;
 var iron = new IronStream("projectId", "projectToken");
-//this time let's grab a reference to the queue object returned from .queue
-var myQueue = iron.queue("myQueue");
-sink = new Sink(myQueue);
-iron.pipe(someOtherStream).pipe(sink); //every successful message is deleted from the queue.
+var myQueueStream = iron.queue("myQueue");
+sink = new Sink(myQueueStream); //create a Sink for myQueue
+myQueueStream.pipe(someOtherStream).pipe(sink); //every successful message is deleted from the queue.
 ```
