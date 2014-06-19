@@ -1,5 +1,5 @@
 {
-  "name": "ironmq-consumer",
+  "name": "ironmq-stream",
   "version": "0.0.1",
   "description": "Wraps ironmq client in stream interface",
   "author": "Chris Olivares <chris.olivares@me.com>",
@@ -10,11 +10,13 @@
     "lodash": "2.3.0",
     "debug": "0.7.3",
     "through": "2.3.4",
+    "dref": "0.1.2",
     "easy-stream": ""
   },
   "devDependencies": {
     "expect.js": "0.2.0",
     "mocha": "1.14.0",
-    "sleep": "1.1.2"
+    "sleep": "1.1.2",
+    "sinon": "1.10.2"
   }
 }

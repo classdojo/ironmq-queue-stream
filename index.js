@@ -3,8 +3,10 @@ var Stream = require("stream");
 var _       = require("lodash");
 var util = require("util");
 var EventEmitter = require("events").EventEmitter;
+var JsonParser = require("./jsonparser");
 
 util.inherits(Queue, Stream.Readable);
+util.inherits(Sink, Stream.Writable);
 
 function IronStream(projectId, projectToken) {
   if(!projectId || !projectToken) {
@@ -40,7 +42,7 @@ function Queue(ironStream, name, options) {
   Stream.Readable.call(this, {objectMode: true, decodeStrings: false});
   this.name = name;
   this.options = options;
-  this.__q = ironStream.MQ.queue(name);
+  this.q = ironStream.MQ.queue(name);
   this.running = true;
   this.messages = [];
 }
@@ -50,7 +52,7 @@ Queue.prototype._read = function() {
   var options = {n: this.options.maxMessagesPerEvent};
   if(!this.__i && this.running) {
     this.__i = setInterval(function() {
-      me.__q.get(options, function(error, messages) {
+      me.q.get(options, function(error, messages) {
         if(error) return me.emit("error", error);
         if(!messages) return;
         messages = _.isArray(messages) ? messages : [messages]; 
@@ -98,8 +100,45 @@ Queue.prototype.resetMessages = function() {
   this.messages = [];
 };
 
+/*
+ * Provides a writable stream for ironmq manipulation. Messages written to the
+ * stream will be deleted from the remote queue.
+
+ Sink should be used downstream of an IronmqStream instance.
+
+ @param instance of IronStream.Queue.  This is returned when .queue()
+        is invoked on an instantiated IronStream object.
+*/
+function Sink(ironmqQueue) {
+  Stream.Writable.call(this, {objectMode: true, decodeStrings: false});
+  this.q = ironmqQueue.q;
+}
+
+
+Sink.prototype._write = function(message, enc, next) {
+  if(!message.id) {
+    return this.emit("error", new Error("Message does not have an `id` property"), message);
+  }
+  this.q.del(message.id, next);
+};
+
 exports.IronStream = IronStream;
 exports.Queue = Queue;
+exports.Sink = Sink;
+
+/*
+  @param ironmqStream {Stream} A configured ironmq stream.
+  @param onError {Function} Error handling
+*/
+
+exports.parseJson = function(ironmqStream, onError) {
+  parsedStream = new JsonParser({parseField: "body", enrichWith: ["id"]});
+  parsedStream.on("error", onError || function() {});
+  return ironmqStream
+            .pipe(parsedStream);
+};
+
+
 exports.useStub = function(stub) {
   IronMQ = stub;
 };

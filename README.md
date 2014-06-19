@@ -8,22 +8,66 @@ make test
 ```
 
 
-
+## Usage
 ```javascript
 IronStream = require("ironmq-stream");
 
 var iron = new IronStream("projectId", "projectToken");
 
+//initialize a queue for that stream to pull from
+iron.queue("someMessageQueue");
 
-var test = iron.queue("test", {checkEvery: 10, maxMessagesPerEvent: 100});
+//pipe that stream to something useful
+iron.pipe(someOtherStream);
 
-test.on("readable", function() {
-    console.log("You've got messages.", this.read());
+/*
+  The output of iron stream is the raw json pulled from the iron queue.
+  Sometimes you want to reliably parse json that you stored on the queue
+  to then process downstream.
+
+  Say we stored a stringified json object on the queue like: 
+    '{
+      "some": "message"
+    }'
+
+  What's actually output from the ironmq queue is
+    {
+      "id": "123",
+      "body": '{"some": "message"}'
+    }
+
+  Ironmq Stream provides a helper method to output a parsed json object, allowing
+  the client to define an option onError handler that executes when there's some
+  parsing error.
+*/
+
+var parsedStream = IronStream.parseJson(iron, function(err, message) {
+  console.error(err + " for message " + message);
 });
 
-test.on('error', function(err) {
-  //handle fetch error
-});
+parsedStream.pipe(someOtherStream);
+/*
+  someOtherStream now gets
+  {
+    "id": "123",
+    "some": "message"
+  }
+  The object is enriched with id in case you want to use a Queue sink downstream.
+*/
+
 ```
 
-test.start();
+### Sinks
+
+```javascript
+/*
+  Sometimes you might want to delete a message off IronMQ after doing some processing.
+  Sinks make that easy.
+*/
+var Sink = require("iron-stream").Sink;
+var iron = new IronStream("projectId", "projectToken");
+var myQueue = iron.queue("myQueue");
+//this time let's grab a reference to the queue object returned form .queue
+sink = new Sink(myQueue);
+iron.pipe(someOtherStream).pipe(sink); //every successful message is deleted from the queue.
+```
