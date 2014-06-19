@@ -216,6 +216,7 @@ describe("JsonParser", function() {
         "utf-8",
         function() {}
      );
+    expectation.verify();
   });
 
   describe("`opts`", function() {
@@ -249,6 +250,7 @@ describe("JsonParser", function() {
             "utf-8",
             function() {}
         );
+        expectation.verify();
       });
     });
 
@@ -287,6 +289,7 @@ describe("JsonParser", function() {
             "utf-8",
             function() {}
         );
+        expectation.verify();
       });
     });
   });
