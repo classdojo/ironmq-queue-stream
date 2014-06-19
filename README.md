@@ -1,5 +1,4 @@
-# ironmq-stream (WIP)
-
+# ironmq-queue-stream
 
 ## Tests
 
@@ -10,7 +9,7 @@ make test
 
 ## Usage
 ```javascript
-IronStream = require("ironmq-stream");
+IronStream = require("ironmq-queue-stream");
 
 var iron = new IronStream("projectId", "projectToken");
 
@@ -37,7 +36,7 @@ iron.pipe(someOtherStream);
     }
 
   Ironmq Stream provides a helper method to output a parsed json object, allowing
-  the client to define an option onError handler that executes when there's some
+  the client to define an optional onError handler that executes when there's some
   parsing error.
 */
 
@@ -66,8 +65,8 @@ parsedStream.pipe(someOtherStream);
 */
 var Sink = require("iron-stream").Sink;
 var iron = new IronStream("projectId", "projectToken");
+//this time let's grab a reference to the queue object returned from .queue
 var myQueue = iron.queue("myQueue");
-//this time let's grab a reference to the queue object returned form .queue
 sink = new Sink(myQueue);
 iron.pipe(someOtherStream).pipe(sink); //every successful message is deleted from the queue.
 ```

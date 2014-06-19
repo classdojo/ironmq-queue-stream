@@ -1,8 +1,8 @@
 {
-  "name": "ironmq-stream",
+  "name": "ironmq-queue-stream",
   "version": "0.0.1",
-  "description": "Wraps ironmq client in stream interface",
-  "author": "Chris Olivares <chris.olivares@me.com>",
+  "description": "Wraps the ironmq client in a stream interface",
+  "author": "Chris Olivares <chris@classdojo.com>",
   "engine": "node 0.10.0",
   "main": "./index.js",
   "dependencies": {
