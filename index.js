@@ -53,7 +53,7 @@ Queue.prototype._read = function() {
   if(!this.__i && this.running) {
     this.__i = setInterval(function() {
       me.q.get(options, function(error, messages) {
-        if(error) return me.emit("error", error);
+        if(error) return me.emit("queueError", error);
         if(!messages) return;
         messages = _.isArray(messages) ? messages : [messages]; 
         me.messages.concat(messages);
@@ -81,6 +81,10 @@ Queue.prototype._read = function() {
 */
 Queue.prototype.resume = function() {
   this.running = true;
+};
+
+Queue.prototype.onFetchError = function(f) {
+  this.on("queueError", f);
 };
 
 /*
@@ -117,9 +121,18 @@ function Sink(ironmqQueue) {
 
 Sink.prototype._write = function(message, enc, next) {
   if(!message.id) {
-    return this.emit("error", new Error("Message does not have an `id` property"), message);
+    return this.emit("deleteError", new Error("Message does not have an `id` property"), message);
   }
-  this.q.del(message.id, next);
+  this.q.del(message.id, function(err) {
+    if(err) {
+      this.emit("deleteError", error);
+    }
+    next();
+  });
+};
+
+Sink.prototype.onDeleteError = function(f) {
+  this.on("deleteError", f);
 };
 
 exports.IronStream = IronStream;
@@ -133,7 +146,11 @@ exports.Sink = Sink;
 
 exports.parseJson = function(ironmqStream, onError) {
   parsedStream = new JsonParser({parseField: "body", enrichWith: ["id"]});
-  parsedStream.on("error", onError || function() {});
+  parsedStream.on("parseError", onError || function() {});
+  //let's mirror error events from parser into ironmqStream for simplicity
+  parsedStream.on("error", function() {
+    ironmqStream.emit.apply(ironmqStream, ["error"].concat(_.toArray(arguments)))
+  });
   return ironmqStream
             .pipe(parsedStream);
 };

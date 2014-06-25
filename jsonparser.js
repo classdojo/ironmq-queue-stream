@@ -44,13 +44,13 @@ JsonParser.prototype._transform = function(jobs, enc, cb) {
     toParse = this.opts.parseField ? dref.get(currentJob, this.opts.parseField)
                                        : currentJob;
     if(!toParse) {
-      return this.emit("error", new Error("Object does not contain field", this.opts.parseField), currentJob);
+      return this.emit("parseError", new Error("Object does not contain field", this.opts.parseField), currentJob);
     }
     try {
       parsed = JSON.parse(toParse)
     } catch (e) {
       //emit to error channel
-      this.emit("error", e, currentJob);
+      this.emit("parseError", e, currentJob);
       continue;
     }
     if(this.opts.enrichWith) {

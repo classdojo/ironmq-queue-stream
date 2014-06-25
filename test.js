@@ -117,14 +117,14 @@ describe("Sink", function() {
     ironQueue = iron.queue("someQueue", {checkEvery: 100, maxMessagesPerEvent: 1});
   });
 
-  it("should emit an error if the message does not have an id field", function() {
+  it("should emit a deleteError event if the message does not have an id field", function() {
     var badMessage = {message: "without id"};
     sink = new IronSink(ironQueue);
     mock = sinon.mock(sink);
     expectation = mock
                     .expects("emit")
                     .once()
-                    .withArgs("error", new Error("Message does not have an `id` property"), badMessage);
+                    .withArgs("deleteError", new Error("Message does not have an `id` property"), badMessage);
     sink._write(badMessage, "utf-8", function() {});
     expectation.verify();
     mock.restore();
@@ -191,11 +191,11 @@ describe("JsonParser", function() {
     expectation.verify();
   });
 
-  it("should emit an error when it receives bad json", function() {
+  it("should emit a parseError when it receives bad json", function() {
     expectation = jsonParserMock
                     .expects("emit")
                     .once()
-                    .withArgs("error", new Error('SyntaxError: Unexpected token }'), testJson.badJson);
+                    .withArgs("parseError", new Error('SyntaxError: Unexpected token }'), testJson.badJson);
     jsonParser._transform(
         [testJson.badJson],
         "utf-8",
@@ -223,13 +223,13 @@ describe("JsonParser", function() {
     var opts;
     describe("parseField", function(done) {
 
-      it("should emit an error when the field specified is not defined in the input object", function() {
+      it("should emit a parseError when the field specified is not defined in the input object", function() {
         opts = {parseField: "someField"};
         jsonParser = new JsonParser(opts);
         expectation = sinon.mock(jsonParser)
                           .expects("emit")
                           .once()
-                          .withArgs("error", new Error("Object does not contain field someField"), testJson.jsonWithNestedJson);
+                          .withArgs("parseError", new Error("Object does not contain field someField"), testJson.jsonWithNestedJson);
         jsonParser._transform(
             [testJson.jsonWithNestedJson],
             "utf-8",
