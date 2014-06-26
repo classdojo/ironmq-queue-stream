@@ -69,3 +69,6 @@ var myQueueStream = iron.queue("myQueue");
 sink = new Sink(myQueueStream); //create a Sink for myQueue
 myQueueStream.pipe(someOtherStream).pipe(sink); //every successful message is deleted from the queue.
 ```
+
+### Error Handling
+  

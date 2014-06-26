@@ -76,7 +76,7 @@ describe("Queue", function() {
   describe("#pause", function() {
     it("should stop pulling messages from the queue", function(done) {
       var reader = startReading(queue);
-      queue.pause();
+      queue.stopFetching();
       setTimeout(function() {
         expect(queue.q.dump().messages).to.have.length(2);
         reader.stopReading();
@@ -89,7 +89,7 @@ describe("Queue", function() {
   describe("#resume", function() {
     var reader;
     beforeEach(function(done) {
-      queue.pause();
+      queue.stopFetching();
       reader = startReading(queue);
       setTimeout(done, 100); //wait some time
     });

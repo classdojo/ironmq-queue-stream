@@ -1,6 +1,6 @@
 {
   "name": "ironmq-queue-stream",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Wraps the ironmq client in a stream interface",
   "author": "Chris Olivares <chris@classdojo.com>",
   "engine": "node 0.10.0",

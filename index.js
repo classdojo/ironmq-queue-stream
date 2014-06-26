@@ -88,11 +88,11 @@ Queue.prototype.onFetchError = function(f) {
 };
 
 /*
- * Function: pause
+ * Function: stopFetching
  *
  * Stops the underlying polling of IronMQ.
 */
-Queue.prototype.pause = function() {
+Queue.prototype.stopFetching = function() {
   if(this.__i) {
     clearInterval(this.__i);
     this.__i = null;
@@ -141,16 +141,12 @@ exports.Sink = Sink;
 
 /*
   @param ironmqStream {Stream} A configured ironmq stream.
-  @param onError {Function} Error handling
+  @param onParseError {Function} Called when there's a parsing error.
 */
 
-exports.parseJson = function(ironmqStream, onError) {
+exports.parseJson = function(ironmqStream, onParseError) {
   parsedStream = new JsonParser({parseField: "body", enrichWith: ["id"]});
-  parsedStream.on("parseError", onError || function() {});
-  //let's mirror error events from parser into ironmqStream for simplicity
-  parsedStream.on("error", function() {
-    ironmqStream.emit.apply(ironmqStream, ["error"].concat(_.toArray(arguments)))
-  });
+  parsedStream.on("parseError", onParseError || function() {});
   return ironmqStream
             .pipe(parsedStream);
 };
