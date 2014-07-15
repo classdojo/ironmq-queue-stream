@@ -8,14 +8,16 @@ var JsonParser = require("./jsonparser");
 util.inherits(Queue, Stream.Readable);
 util.inherits(Sink, Stream.Writable);
 
-function IronStream(projectId, projectToken) {
-  if(!projectId || !projectToken) {
+function IronStream(config) {
+  if(!config.projectId || !config.projectToken) {
     throw new Error("Must include both `projectId` and `projectToken`");
   }
   if(!(this instanceof IronStream)) {
-    return new IronStream(projectId, projectToken);
+    return new IronStream(config);
   }
-  this.MQ = new IronMQ.Client({project_id: projectId, token: projectToken});
+  this.MQ = new IronMQ.Client(
+                _.merge({project_id: config.projectId, token: config.projectToken},
+                _.omit(config, "projectId", "projectToken")));
   this.queues = {};
 }
 

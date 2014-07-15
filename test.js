@@ -10,12 +10,17 @@ projectId = "SomeProjectId",
 projectToken = "SomeProjectToken",
 _ = require("lodash");
 
+var config = {
+  projectId: projectId,
+  projectToken: projectToken
+};
+
 describe("IronStream", function() {
   var iron;
   describe("#constructor", function() {
-    it("should require an arity of two", function(done) {
+    it("should require a config object with both projectId and projectToken", function(done) {
       try {
-        iron = new IronStream("");
+        iron = new IronStream(_.omit(config, "projectId"));
       } catch (e) {
         expect(e).to.be.an(Error);
         return done();
@@ -24,13 +29,13 @@ describe("IronStream", function() {
     });
 
     it("should allow construction via invocation", function(done) {
-      iron = IronStream(projectId, projectToken);
+      iron = IronStream(config);
       expect(iron).to.be.an(IronStream);
       done();
     });
 
     it("should allow construction via `new`", function(done) {
-      iron = new IronStream(projectId, projectToken);
+      iron = new IronStream(config);
       expect(iron).to.be.an(IronStream);
       done();
     });
@@ -57,7 +62,7 @@ describe("Queue", function() {
   var iron, queue;
   beforeEach(function() {
     Iron.useStub(Stub);
-    iron = IronStream(projectId, projectToken);
+    iron = IronStream(config);
     queue = iron.queue("someQueue", {checkEvery: 100, maxMessagesPerEvent: 1});
     queue.q.setMessages([{body: "hello"}, {body: "world"}]);
   });
@@ -113,7 +118,7 @@ describe("Sink", function() {
 
   beforeEach(function() {
     Iron.useStub(Stub);
-    var iron = new IronStream(projectId, projectToken);
+    var iron = new IronStream(config);
     ironQueue = iron.queue("someQueue", {checkEvery: 100, maxMessagesPerEvent: 1});
   });
 

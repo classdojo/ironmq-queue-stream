@@ -11,7 +11,7 @@ make test
 ```javascript
 IronStream = require("ironmq-queue-stream");
 
-var iron = new IronStream("projectId", "projectToken");
+var iron = new IronStream({projectId: "", projectToken: ""});
 
 //initialize a queue for that stream to pull from
 var someQueueStream = iron.queue("someQueue");
@@ -64,7 +64,7 @@ parsedStream.pipe(someOtherStream);
   Sinks make that easy.
 */
 var Sink = require("iron-stream").Sink;
-var iron = new IronStream("projectId", "projectToken");
+var iron = new IronStream({projectId: "", projectToken: ""});
 var myQueueStream = iron.queue("myQueue");
 sink = new Sink(myQueueStream); //create a Sink for myQueue
 myQueueStream.pipe(someOtherStream).pipe(sink); //every successful message is deleted from the queue.
