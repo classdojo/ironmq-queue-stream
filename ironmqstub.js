@@ -193,7 +193,7 @@ Queue.prototype.setMessages = function(messages) {
   if(!_.isArray(messages)) {
     throw new Error("Must pass in an error");
   }
-  for ( message in messages ) {
+  for ( var message in messages ) {
     _pushMessage(this, messages[message]);
   }
 }

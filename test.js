@@ -91,6 +91,7 @@ describe("Queue", function() {
   });
 
   describe("#_startFetching", function() {
+    var stub, mock, expectation;
 
     it("doesn't set a fetching interval if we're paused", function() {
       queue.running = false;
@@ -150,7 +151,6 @@ describe("Queue", function() {
     });
 
     describe("when __flush == false", function() {
-
       it("does not call _addMessagesToQueue", function(done) {
         stub = sinon.stub(queue.q, "get");
         stub.yields(null, {body: '{"some": "json"}'});
