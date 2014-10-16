@@ -78,6 +78,7 @@ JsonParser.prototype._transform = function(jobs, enc, cb) {
       this.push(decodedJobs.shift());
     }
   }
+  cb();
 };
 
 module.exports = JsonParser;
