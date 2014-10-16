@@ -204,7 +204,7 @@ exports.Sink = Sink;
 */
 
 exports.parseJson = function(ironmqStream, onParseError) {
-  parsedStream = new JsonParser({parseField: "body", enrichWith: ["id"]});
+  var parsedStream = new JsonParser({parseField: "body", enrichWith: ["id"]});
   parsedStream.on("parseError", onParseError || function() {});
   return ironmqStream
             .pipe(parsedStream);
