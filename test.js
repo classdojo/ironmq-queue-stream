@@ -58,24 +58,172 @@ var getQueueMessages = function(queue) {
       queue.q.dump().outstandingMessages
   );
 };
+
+var CHECK_EVERY = 10;
 describe("Queue", function() {
   var iron, queue;
   beforeEach(function() {
     Iron.useStub(Stub);
     iron = IronStream(config);
-    queue = iron.queue("someQueue", {checkEvery: 100, maxMessagesPerEvent: 1});
+    queue = iron.queue("someQueue", {checkEvery: CHECK_EVERY, maxMessagesPerEvent: 1});
     queue.q.setMessages([{body: "hello"}, {body: "world"}]);
   });
 
-  it("should pull messages off the queue at the specified interval", function(done) {
-    //pump data by hooking up to a writable stream
-    var reader = startReading(queue);
-    //manually inspect the underlying queue to see how many messages are on there.
-    setTimeout(function() {
-      expect(queue.q.dump().messages).to.have.length(0);
-      reader.stopReading();
-      done();
-    }, 300);
+  describe("#_read", function() {
+    var mock, expectation, stub;
+
+    it("starts with this.__flush == false", function() {
+      expect(queue.__flush).to.be(false);
+    });
+
+    it("sets this.__flush to true when called", function() {
+      queue._read();
+      expect(queue.__flush).to.be(true);
+    });
+
+    it("calls #_startFetching", function() {
+      mock = sinon.mock(queue);
+      expectation = mock.expects("_startFetching").once();
+      queue._read();
+      expectation.verify();
+      mock.restore();
+    });
+  });
+
+  describe("#_startFetching", function() {
+
+    it("doesn't set a fetching interval if we're paused", function() {
+      queue.running = false;
+      queue._startFetching();
+      expect(queue.__i).to.not.be.ok();
+    });
+
+    it("sets a fetching interval if one does not exist && we're not in a paused state", function() {
+      queue._startFetching();
+      expect(queue.__i).to.be.ok();
+    });
+
+    describe("when __flush == true", function() {
+      beforeEach(function() {
+        queue.__flush = true;
+      });
+
+      it("does not call #_addMessagesToQueue when no messages are returned from IronMQ", function(done) {
+        stub = sinon.stub(queue.q, "get");
+        stub.yields(null, undefined);
+
+        mock = sinon.mock(queue);
+        expectation = mock.expects("_addMessagesToQueue").never();
+        queue._startFetching();
+        setTimeout(function() {
+          expectation.verify();
+          mock.restore();
+          done();
+        }, CHECK_EVERY + 5);
+      });
+
+      it("calls #_addMessagesToQueue when messages are returned from IronMQ", function(done) {
+        stub = sinon.stub(queue.q, "get");
+        stub.yields(null, {body: '{"some": "json"}'});
+        mock = sinon.mock(queue);
+        expectation = mock.expects("_addMessagesToQueue").once();
+        queue._startFetching();
+        setTimeout(function() {
+          expectation.verify();
+          mock.restore();
+          done();
+        }, CHECK_EVERY + 5);
+      });
+
+      it("calls #_startMessageConsumer when messages are returned from IronMQ", function(done) {
+        stub = sinon.stub(queue.q, "get");
+        stub.yields(null, {body: '{"some": "json"}'});
+        mock = sinon.mock(queue);
+        expectation = mock.expects("_startMessageConsumer").once();
+        queue._startFetching();
+        setTimeout(function() {
+          expectation.verify();
+          mock.restore();
+          done();
+        }, CHECK_EVERY + 5);
+      });
+    });
+
+    describe("when __flush == false", function() {
+
+      it("does not call _addMessagesToQueue", function(done) {
+        stub = sinon.stub(queue.q, "get");
+        stub.yields(null, {body: '{"some": "json"}'});
+        mock = sinon.mock(queue);
+        expectation = mock.expects("_startMessageConsumer").never();
+        queue._startFetching();
+        setTimeout(function() {
+          expectation.verify();
+          mock.restore();
+          done();
+        }, CHECK_EVERY + 5);
+      });
+
+    });
+
+  });
+
+  describe("#_startMessageConsumer", function() {
+    var stub;
+    beforeEach(function(done) {
+      stub = sinon.stub(queue.q, "get");
+      stub.onFirstCall().yields(null, {body: '{"some": "json"}'});
+      stub.onSecondCall().yields(null, {body: '{"some": "more json"}'});
+      //tell queue to put messages in internal buffer
+      queue._startFetching();
+      setTimeout(done, CHECK_EVERY * 2);
+    });
+
+    it("does not start consuming if __consumerInterval is truthy", function(done) {
+      queue.__consumerInterval = {};
+      queue._startMessageConsumer();
+      //let's just give a bit of delay to be sure node I/O loop finishes.
+      setTimeout(function() {
+        expect(queue.messages).to.have.length(2);
+        done();
+      }, CHECK_EVERY);
+    });
+
+    it("clears __consumerInterval if the messages array is empty", function(done) {
+      queue._startMessageConsumer();
+      setTimeout(function() {
+        expect(queue.__consumerInterval).to.be(null);
+        done();
+      }, CHECK_EVERY * 3);
+    });
+
+    it("clears __consumerInterval and sets __flush == false if this.push signals backpressure", function(done) {
+      stub = sinon.stub(queue, "push");
+      stub.onFirstCall().returns(false);
+      queue._startMessageConsumer();
+      setTimeout(function() {
+        expect(queue.__consumerInterval).to.be(null);
+        expect(queue.messages).to.have.length(1);
+        expect(queue.__flush).to.be(false);
+        done();
+      }, CHECK_EVERY * 3);
+    });
+  });
+
+  describe("#_addMessagesToQueue", function() {
+    var message = {
+      body: "some message"
+    };
+    it("concats message to queue.messages", function() {
+      queue._addMessagesToQueue(message);
+      expect(queue.messages).to.have.length(1);
+    });
+
+    it("concats message to queue.messages if message is an array", function() {
+      queue._addMessagesToQueue([message]);
+      expect(queue.messages).to.have.length(1);
+      expect(queue.messages[0]).to.eql(message);
+    });
   });
 
   describe("#pause", function() {

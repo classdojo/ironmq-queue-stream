@@ -1,9 +1,12 @@
-var IronMQ  = require("iron_mq");
-var Stream = require("stream");
-var _       = require("lodash");
-var util = require("util");
-var EventEmitter = require("events").EventEmitter;
-var JsonParser = require("./jsonparser");
+var IronMQ        = require("iron_mq");
+var Stream        = require("stream");
+var _             = require("lodash");
+var util          = require("util");
+var EventEmitter  = require("events").EventEmitter;
+var JsonParser    = require("./jsonparser");
+var debug         = require("debug")("ironmq-queue");
+var inspect       = require("util").inspect;
+var async         = require("async");
 
 util.inherits(Queue, Stream.Readable);
 util.inherits(Sink, Stream.Writable);
@@ -47,34 +50,85 @@ function Queue(ironStream, name, options) {
   this.q = ironStream.MQ.queue(name);
   this.running = true;
   this.messages = [];
+  this.__flush = false;
 }
 
 Queue.prototype._read = function() {
+  this.__flush = true;
+  this._startFetching();
+};
+
+/*
+ * Method: _startFetching
+ *
+ * Starts polling of IronMQ for messages.
+*/
+Queue.prototype._startFetching = function() {
+  var options;
   var me = this;
-  var options = {n: this.options.maxMessagesPerEvent};
   if(!this.__i && this.running) {
+    options = {n: this.options.maxMessagesPerEvent};
     this.__i = setInterval(function() {
       me.q.get(options, function(error, messages) {
-        if(error) return me.emit("queueError", error);
-        if(!messages) return;
-        messages = _.isArray(messages) ? messages : [messages]; 
-        me.messages.concat(messages);
+        if(error) {
+          debug("Error fetching messages:", error);
+          return me.emit("queueError", error);
+        }
+        debug("Fetched messages:", messages);
+        if(_.isEmpty(messages)) return;
+        me._addMessagesToQueue(messages);
+        if(me.__flush) {
+          me._startMessageConsumer();
+        }
       });
     }, this.options.checkEvery);
   }
-  if(this.messages.length) {
-    if(!this.push(this.messages)) {
-      this.pause();
-      /* 
-        Slight hack since this was a system defined pause. System will resume next
-        time _read is called.
-      */
-      this.resume();
-    }; //handle backpressure
-    this.resetMessages();
+};
+
+/*
+ *  Method: _startMessageConsumer
+ *
+ *  Handles retry logic in the event of this.push failing.
+*/ 
+Queue.prototype._startMessageConsumer = function() {
+  var message;
+  var me = this;
+  /* 
+   *  Try pushing as many messages downstream as possible.
+  */
+  if(!this.__consumerInterval) {
+    debug("Starting internal queue consumer");
+    /* 
+     * Let's allow node to service downstream I/O instead
+     * of blocking in a while(true) loop
+    */
+    this.__consumerInterval =  setInterval(function() {
+      if(!me._pushOneMessageDownstream()) {
+        debug("Clearing queue consumer");
+        me.__flush = false;
+        clearInterval(me.__consumerInterval);
+        me.__consumerInterval = null;
+      };
+    }, 0);
   }
 };
 
+Queue.prototype._addMessagesToQueue = function(messages) {
+  messages = _.isArray(messages) ? messages : [messages];
+  debug("Adding " + messages.length + " messages to queue");
+  this.messages = this.messages.concat(messages);
+};
+
+/* 
+ * Synchronous.
+ *
+ * Attempts to push one message downstream.
+ * Returns truthy if successful, false otherwise.
+*/
+Queue.prototype._pushOneMessageDownstream = function() {
+  debug("Pushing one message downstream");
+  return !_.isEmpty(this.messages) && this.push(this.messages.shift());
+};
 
 /*
  * Function: resume
@@ -82,6 +136,7 @@ Queue.prototype._read = function() {
  * Used to resume a queue after calling stop.
 */
 Queue.prototype.resume = function() {
+  debug("Resuming...");
   this.running = true;
 };
 
@@ -95,6 +150,7 @@ Queue.prototype.onFetchError = function(f) {
  * Stops the underlying polling of IronMQ.
 */
 Queue.prototype.stopFetching = function() {
+  debug("Stop fetching");
   if(this.__i) {
     clearInterval(this.__i);
     this.__i = null;
@@ -129,6 +185,7 @@ Sink.prototype._write = function(message, enc, next) {
     if(err) {
       this.emit("deleteError", error);
     }
+    debug("Deleted message:", message);
     next();
   });
 };

@@ -9,7 +9,7 @@ make test
 
 ## Usage
 ```javascript
-IronStream = require("ironmq-queue-stream");
+IronStream = require("ironmq-queue-stream").IronStream;
 
 var iron = new IronStream({projectId: "", projectToken: ""});
 
@@ -63,7 +63,7 @@ parsedStream.pipe(someOtherStream);
   Sometimes you might want to delete a message off IronMQ after doing some processing.
   Sinks make that easy.
 */
-var Sink = require("iron-stream").Sink;
+var Sink = require("ironmq-queue-stream").Sink;
 var iron = new IronStream({projectId: "", projectToken: ""});
 var myQueueStream = iron.queue("myQueue");
 sink = new Sink(myQueueStream); //create a Sink for myQueue
