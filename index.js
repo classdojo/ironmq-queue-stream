@@ -185,7 +185,7 @@ Sink.prototype._write = function(message, enc, next) {
     if(err) {
       this.emit("deleteError", error);
     }
-    debug("Deleted message:", message);
+    debug("Deleted message:", message.id);
     next();
   });
 };
