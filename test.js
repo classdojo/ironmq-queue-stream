@@ -330,7 +330,7 @@ describe("JsonParser", function() {
     jsonParserMock.restore();
   });
 
-  it("should decode a job into JSON when it receives it", function() {
+  it("should decode an array of jobs into JSON when it receives it", function() {
     expectedData = [JSON.parse(testJson.goodJson1), JSON.parse(testJson.goodJson2)];
     expectation = jsonParserMock
                         .expects("push")
@@ -341,6 +341,16 @@ describe("JsonParser", function() {
         "utf-8",
         function() {}
     );
+    expectation.verify();
+  });
+
+  it("should decode a single job into JSON", function() {
+    expectedData = JSON.parse(testJson.goodJson1);
+    expectation = jsonParserMock
+                        .expects("push")
+                        .once()
+                        .withArgs(expectedData);
+    jsonParser._transform(testJson.goodJson1, "utf-8", function() {});
     expectation.verify();
   });
 

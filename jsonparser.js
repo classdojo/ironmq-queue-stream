@@ -38,6 +38,10 @@ function JsonParser(opts) {
 JsonParser.prototype._transform = function(jobs, enc, cb) {
   var decodedJobs = [],
   toParse, parsed, enrichField, currentJob;
+  var isArray = _.isArray(jobs);
+  if(!isArray) {
+    jobs = [jobs]
+  }
   for(var i = 0; i < jobs.length; i++) {
     //pluck out field under test
     currentJob = jobs[i];
@@ -67,7 +71,12 @@ JsonParser.prototype._transform = function(jobs, enc, cb) {
     decodedJobs.push(parsed);
   }
   if(decodedJobs.length) {
-    this.push(decodedJobs);
+    if(isArray) {
+      this.push(decodedJobs);
+
+    } else {
+      this.push(decodedJobs.shift());
+    }
   }
 };
 

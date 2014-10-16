@@ -44,7 +44,7 @@ IronStream.prototype.queue = function(name, options) {
 
 
 function Queue(ironStream, name, options) {
-  Stream.Readable.call(this, {objectMode: true, decodeStrings: false});
+  Stream.Readable.call(this, {objectMode: true});
   this.name = name;
   this.options = options;
   this.q = ironStream.MQ.queue(name);
@@ -53,7 +53,7 @@ function Queue(ironStream, name, options) {
   this.__flush = false;
 }
 
-Queue.prototype._read = function() {
+Queue.prototype._read = function(s) {
   this.__flush = true;
   this._startFetching();
 };
@@ -104,7 +104,7 @@ Queue.prototype._startMessageConsumer = function() {
     */
     this.__consumerInterval =  setInterval(function() {
       if(!me._pushOneMessageDownstream()) {
-        debug("Clearing queue consumer");
+        debug("Stopping internal queue consumer");
         me.__flush = false;
         clearInterval(me.__consumerInterval);
         me.__consumerInterval = null;
