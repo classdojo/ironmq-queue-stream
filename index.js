@@ -35,9 +35,13 @@ function IronStream(config) {
 
 
 IronStream.prototype.queue = function(name, options) {
+  if(options.maxMessagesPerEvent) {
+    options.n = options.maxMessagesPerEvent;
+    delete options.maxMessagesPerEvent;
+  }
   var options = _.merge({
       checkEvery: 1000,
-      maxMessagesPerEvent: 10
+      n: 10
     }, (options || {}));
   this.queues[name] = this.queues[name]
     || new Queue(this, name, options);
