@@ -59,6 +59,33 @@ var getQueueMessages = function(queue) {
   );
 };
 
+describe("Fetcher", function() {
+  describe("#start", function() {
+    it("sets this.running to true");
+
+    it("calls fetch at the given interval");
+
+    it("emits an `error` event if fetch returns an error");
+
+    it("emits a `results` event if fetch returns results");
+
+  });
+
+  describe("#stop", function() {
+    it("sets this.running to false");
+
+    it("clears __i interval if defined");
+
+    it("nullifies __i if defined");
+  });
+
+  describe("#shutdown", function() {
+    it("sets this.shuttingDown");
+
+    it("calls this.stop");
+  });
+})
+
 var CHECK_EVERY = 10;
 describe("Queue", function() {
   var iron, queue;
@@ -69,144 +96,36 @@ describe("Queue", function() {
     queue.q.setMessages([{body: "hello"}, {body: "world"}]);
   });
 
+  it("initializes a fetcher");
+
+  it("adds a default results handler to fetcher");
+
+  it("adds a default error handler to fetcher");
+
+  describe("#firstMessageListener", function() {
+    it("calls _pushOneMessage() when results are not empty");
+
+    it("calls fetcher#stop if only one result is passed in");
+
+    it("does not call fetcher#stop if more than one result is passed in");
+  });
+
   describe("#_read", function() {
     var mock, expectation, stub;
 
-    it("starts with this.__flush == false", function() {
-      expect(queue.__flush).to.be(false);
-    });
+    describe("Empty messages", function() {
 
-    it("sets this.__flush to true when called", function() {
-      queue._read();
-      expect(queue.__flush).to.be(true);
-    });
+      it("calls fetcher start when fetcher is not running");
 
-    it("calls #_startFetching", function() {
-      mock = sinon.mock(queue);
-      expectation = mock.expects("_startFetching").once();
-      queue._read();
-      expectation.verify();
-      mock.restore();
-    });
-  });
-
-  describe("#_startFetching", function() {
-    var stub, mock, expectation;
-
-    it("doesn't set a fetching interval if we're paused", function() {
-      queue.running = false;
-      queue._startFetching();
-      expect(queue.__i).to.not.be.ok();
-    });
-
-    it("sets a fetching interval if one does not exist && we're not in a paused state", function() {
-      queue._startFetching();
-      expect(queue.__i).to.be.ok();
-    });
-
-    describe("when __flush == true", function() {
-      beforeEach(function() {
-        queue.__flush = true;
-      });
-
-      it("does not call #_addMessagesToQueue when no messages are returned from IronMQ", function(done) {
-        stub = sinon.stub(queue.q, "get");
-        stub.yields(null, undefined);
-
-        mock = sinon.mock(queue);
-        expectation = mock.expects("_addMessagesToQueue").never();
-        queue._startFetching();
-        setTimeout(function() {
-          expectation.verify();
-          mock.restore();
-          done();
-        }, CHECK_EVERY + 5);
-      });
-
-      it("calls #_addMessagesToQueue when messages are returned from IronMQ", function(done) {
-        stub = sinon.stub(queue.q, "get");
-        stub.yields(null, {body: '{"some": "json"}'});
-        mock = sinon.mock(queue);
-        expectation = mock.expects("_addMessagesToQueue").once();
-        queue._startFetching();
-        setTimeout(function() {
-          expectation.verify();
-          mock.restore();
-          done();
-        }, CHECK_EVERY + 5);
-      });
-
-      it("calls #_startMessageConsumer when messages are returned from IronMQ", function(done) {
-        stub = sinon.stub(queue.q, "get");
-        stub.yields(null, {body: '{"some": "json"}'});
-        mock = sinon.mock(queue);
-        expectation = mock.expects("_startMessageConsumer").once();
-        queue._startFetching();
-        setTimeout(function() {
-          expectation.verify();
-          mock.restore();
-          done();
-        }, CHECK_EVERY + 5);
-      });
-    });
-
-    describe("when __flush == false", function() {
-      it("does not call _addMessagesToQueue", function(done) {
-        stub = sinon.stub(queue.q, "get");
-        stub.yields(null, {body: '{"some": "json"}'});
-        mock = sinon.mock(queue);
-        expectation = mock.expects("_startMessageConsumer").never();
-        queue._startFetching();
-        setTimeout(function() {
-          expectation.verify();
-          mock.restore();
-          done();
-        }, CHECK_EVERY + 5);
-      });
+      it("adds a one time results listener to add the first message to the queue");
 
     });
+    describe("Non-empty messages", function() {
 
-  });
+      it("stops the fetcher when fetcher.running == true");
 
-  describe("#_startMessageConsumer", function() {
-    var stub;
-    beforeEach(function(done) {
-      stub = sinon.stub(queue.q, "get");
-      stub.onFirstCall().yields(null, {body: '{"some": "json"}'});
-      stub.onSecondCall().yields(null, {body: '{"some": "more json"}'});
-      //tell queue to put messages in internal buffer
-      queue._startFetching();
-      setTimeout(done, CHECK_EVERY * 2);
-    });
+      it("pushes one message downstream");
 
-    it("does not start consuming if __consumerInterval is truthy", function(done) {
-      queue.__consumerInterval = {};
-      queue._startMessageConsumer();
-      //let's just give a bit of delay to be sure node I/O loop finishes.
-      setTimeout(function() {
-        expect(queue.messages).to.have.length(2);
-        done();
-      }, CHECK_EVERY);
-    });
-
-    it("clears __consumerInterval if the messages array is empty", function(done) {
-      queue._startMessageConsumer();
-      setTimeout(function() {
-        expect(queue.__consumerInterval).to.be(null);
-        done();
-      }, CHECK_EVERY * 3);
-    });
-
-    it("clears __consumerInterval and sets __flush == false if this.push signals backpressure", function(done) {
-      stub = sinon.stub(queue, "push");
-      stub.onFirstCall().returns(false);
-      queue._startMessageConsumer();
-      setTimeout(function() {
-        expect(queue.__consumerInterval).to.be(null);
-        expect(queue.messages).to.have.length(1);
-        expect(queue.__flush).to.be(false);
-        done();
-      }, CHECK_EVERY * 3);
     });
   });
 
@@ -246,13 +165,9 @@ describe("Queue", function() {
       reader = startReading(queue);
       setTimeout(done, 100); //wait some time
     });
-    it("should resume reading if the queue was previously in a paused state", function(done) {
+    it("sets this.running = true", function() {
       queue.resume();
-      setTimeout(function() {
-        expect(queue.q.dump().messages).to.have.length(0);
-        reader.stopReading();
-        done();
-      }, 300);
+      expect(queue.running).to.be(true);
     });
   });
 });

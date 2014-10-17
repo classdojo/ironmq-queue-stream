@@ -6,6 +6,8 @@ var EventEmitter  = require("events").EventEmitter;
 var JsonParser    = require("./jsonparser");
 var debug         = require("debug")("ironmq-queue");
 var inspect       = require("util").inspect;
+var EventEmitter  = require("events").EventEmitter;
+var inherits      = require("util").inherits;
 var async         = require("async");
 
 util.inherits(Queue, Stream.Readable);
@@ -44,90 +46,64 @@ IronStream.prototype.queue = function(name, options) {
 
 
 function Queue(ironStream, name, options) {
+  var me = this;
   Stream.Readable.call(this, {objectMode: true});
   this.name = name;
   this.options = options;
   this.q = ironStream.MQ.queue(name);
   this.running = true;
   this.messages = [];
-  this.__flush = false;
+  this.fetcher = new Fetcher(me.q.get.bind(me.q, options), options.checkEvery);
+
+  /* add default fetcher handlers */
+  this.fetcher.on("results", function(results) {
+    if(!_.isEmpty(results)) {
+      me._addMessagesToQueue(results);
+    }
+  });
+  this.fetcher.on("error", function(err) {
+    me.emit("queueError", err);
+  });
+  this.firstMessageListener = function(results) {
+    if(!_.isEmpty(results)) {
+      me._pushOneMessage();
+      if(!_.isEmpty(me.messages)) me.fetcher.stop();
+    }
+  };
+}
+
+
+Queue.prototype._pushOneMessage = function() {
+  debug("Pushing one message downstream");
+  if(!this.push(this.messages.shift())) {
+    debug("Downstream backpressure detected");
+  }
 }
 
 Queue.prototype._read = function(s) {
-  this.__flush = true;
-  this._startFetching();
-};
-
-/*
- * Method: _startFetching
- *
- * Starts polling of IronMQ for messages.
-*/
-Queue.prototype._startFetching = function() {
-  var options;
+  debug("System called _read");
   var me = this;
-  if(!this.__i && this.running) {
-    options = {n: this.options.maxMessagesPerEvent};
-    this.__i = setInterval(function() {
-      me.q.get(options, function(error, messages) {
-        if(error) {
-          debug("Error fetching messages:", error);
-          return me.emit("queueError", error);
-        }
-        debug("Fetched messages:", messages);
-        if(_.isEmpty(messages)) return;
-        me._addMessagesToQueue(messages);
-        if(me.__flush) {
-          me._startMessageConsumer();
-        }
-      });
-    }, this.options.checkEvery);
+  if(_.isEmpty(this.messages)) {
+    if(!this.fetcher.running) {
+      this.fetcher.start();
+    }
+    this.fetcher.once("results", this.firstMessageListener);
+  } else {
+    if(this.fetcher.running) {
+      this.fetcher.stop();
+    }
+    me._pushOneMessage();
   }
 };
 
-/*
- *  Method: _startMessageConsumer
- *
- *  Handles retry logic in the event of this.push failing.
-*/ 
-Queue.prototype._startMessageConsumer = function() {
-  var message;
-  var me = this;
-  /* 
-   *  Try pushing as many messages downstream as possible.
-  */
-  if(!this.__consumerInterval) {
-    debug("Starting internal queue consumer");
-    /* 
-     * Let's allow node to service downstream I/O instead
-     * of blocking in a while(true) loop
-    */
-    this.__consumerInterval =  setInterval(function() {
-      if(!me._pushOneMessageDownstream()) {
-        debug("Stopping internal queue consumer");
-        me.__flush = false;
-        clearInterval(me.__consumerInterval);
-        me.__consumerInterval = null;
-      };
-    }, 0);
-  }
-};
+Queue.prototype._isFetching = function() {
+  return !!this.__i;
+}
 
 Queue.prototype._addMessagesToQueue = function(messages) {
   messages = _.isArray(messages) ? messages : [messages];
   debug("Adding " + messages.length + " messages to queue");
   this.messages = this.messages.concat(messages);
-};
-
-/* 
- * Synchronous.
- *
- * Attempts to push one message downstream.
- * Returns truthy if successful, false otherwise.
-*/
-Queue.prototype._pushOneMessageDownstream = function() {
-  debug("Pushing one message downstream");
-  return !_.isEmpty(this.messages) && this.push(this.messages.shift());
 };
 
 /*
@@ -147,16 +123,13 @@ Queue.prototype.onFetchError = function(f) {
 /*
  * Function: stopFetching
  *
- * Stops the underlying polling of IronMQ.
+ * Client-safe way to stop the underlying polling of IronMQ.
+ *
 */
 Queue.prototype.stopFetching = function() {
-  debug("Stop fetching");
-  if(this.__i) {
-    clearInterval(this.__i);
-    this.__i = null;
-    this.running = false;
-  }
+  this.fetcher.shutdown();
 };
+
 
 Queue.prototype.resetMessages = function() {
   this.messages = [];
@@ -185,7 +158,7 @@ Sink.prototype._write = function(message, enc, next) {
     if(err) {
       this.emit("deleteError", error);
     }
-    debug("Deleted message:", message.id);
+    debug("Deleted message: " + message.id);
     next();
   });
 };
@@ -193,6 +166,51 @@ Sink.prototype._write = function(message, enc, next) {
 Sink.prototype.onDeleteError = function(f) {
   this.on("deleteError", f);
 };
+
+
+
+/* Fetcher*/
+
+inherits(Fetcher, EventEmitter);
+
+function Fetcher (fetch, interval) {
+  this.interval = interval;
+  this.fetch = fetch;
+  this.running = false;
+}
+
+Fetcher.prototype.start = function() {
+  var me = this;
+  this.running = true;
+  debug("Starting fetcher");
+  if(!this.__i && !this.shuttingDown) {
+    this.__i = setInterval(function() {
+      me.fetch(function(err, results) {
+        if(err) {
+          debug("Error in fetch: " + err.message);
+          return me.emit("error", err);
+        }
+        me.emit("results", results);
+      });
+    }, this.interval);
+  }
+}
+
+Fetcher.prototype.stop = function() {
+  debug("Stopping fetcher")
+  this.running = false;
+  if(this.__i) {
+    clearInterval(this.__i);
+    this.__i = null;
+  }
+};
+
+Fetcher.prototype.shutdown = function() {
+  this.shuttingDown = true;
+  this.stop();
+}
+
+
 
 exports.IronStream = IronStream;
 exports.Queue = Queue;
