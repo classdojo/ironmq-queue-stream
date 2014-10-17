@@ -212,7 +212,7 @@ describe("Sink", function() {
     mock.restore();
   });
 
-  it("xxx emits a delete event if the message is properly deleted", function(done) {
+  it("emits a delete event if the message is properly deleted", function(done) {
     var message = {id: "123", message: "some Message"};
 
     sink = new IronSink(ironQueue);
