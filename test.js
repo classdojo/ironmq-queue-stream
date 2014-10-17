@@ -177,7 +177,8 @@ describe("Sink", function() {
   var sink,
   expectation,
   mock,
-  ironQueue;
+  ironQueue,
+  stub;
 
   beforeEach(function() {
     Iron.useStub(Stub);
@@ -185,7 +186,7 @@ describe("Sink", function() {
     ironQueue = iron.queue("someQueue", {checkEvery: 100, maxMessagesPerEvent: 1});
   });
 
-  it("should emit a deleteError event if the message does not have an id field", function() {
+  it("emits a deleteError event if the message does not have an id field", function() {
     var badMessage = {message: "without id"};
     sink = new IronSink(ironQueue);
     mock = sinon.mock(sink);
@@ -210,6 +211,27 @@ describe("Sink", function() {
     expectation.verify();
     mock.restore();
   });
+
+  it("xxx emits a delete event if the message is properly deleted", function(done) {
+    var message = {id: "123", message: "some Message"};
+
+    sink = new IronSink(ironQueue);
+    stub = sinon.stub(sink.q, "del")
+              .onFirstCall()
+              .yields(null);
+
+    mock = sinon.mock(sink);
+    expectation = mock
+                    .expects("emit")
+                    .once()
+                    .withArgs("deleted");
+    sink._write(message, "utf-8", function() {
+      expectation.verify();
+      mock.restore();
+      done();
+    });
+  });
+
 });
 
 

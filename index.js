@@ -40,7 +40,7 @@ IronStream.prototype.queue = function(name, options) {
     delete options.maxMessagesPerEvent;
   }
   var options = _.merge({
-      checkEvery: 1000,
+      checkEvery: 10,
       n: 10
     }, (options || {}));
   this.queues[name] = this.queues[name]
@@ -155,14 +155,16 @@ function Sink(ironmqQueue) {
 
 
 Sink.prototype._write = function(message, enc, next) {
+  var me = this;
   if(!message.id) {
     return this.emit("deleteError", new Error("Message does not have an `id` property"), message);
   }
   this.q.del(message.id, function(err) {
     if(err) {
-      this.emit("deleteError", error);
+      this.emit("deleteError", err);
     }
     debug("Deleted message: " + message.id);
+    me.emit("deleted", message.id);
     next();
   });
 };
