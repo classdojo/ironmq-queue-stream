@@ -5,6 +5,8 @@ var util          = require("util");
 var EventEmitter  = require("events").EventEmitter;
 var JsonParser    = require("./jsonparser");
 var debug         = require("debug")("ironmq-queue");
+var fetcherDebug  = require("debug")("fetcher");
+var systemDebug   = require("debug")("system");
 var inspect       = require("util").inspect;
 var EventEmitter  = require("events").EventEmitter;
 var inherits      = require("util").inherits;
@@ -29,18 +31,17 @@ function IronStream(config) {
 /*
  * @param name {String}: Name of the queue to connect to
  * @param options {Object}:
-          options.checkEvery {Num} - Interval with which to check ironMQ in ms.
+          options.concurrentRequests {Num} - Interval with which to check ironMQ in ms.
           options.maxMessagesPerEvent {Num} - The maximum number of messages to return in any given push.
 */
 
 
 IronStream.prototype.queue = function(name, options) {
   if(options.maxMessagesPerEvent) {
-    options.n = options.maxMessagesPerEvent;
-    delete options.maxMessagesPerEvent;
+    options.n = removeAndReturn(options, "maxMessagesPerEvent");
   }
   var options = _.merge({
-      checkEvery: 10,
+      concurrentRequests: 5,
       n: 10
     }, (options || {}));
   this.queues[name] = this.queues[name]
@@ -57,7 +58,7 @@ function Queue(ironStream, name, options) {
   this.q = ironStream.MQ.queue(name);
   this.running = true;
   this.messages = [];
-  this.fetcher = new Fetcher(me.q.get.bind(me.q, options), options.checkEvery);
+  this.fetcher = new Fetcher(me.q.get.bind(me.q, options), removeAndReturn(options, "concurrentRequests"));
 
   /* add default fetcher handlers */
   this.fetcher.on("results", function(results) {
@@ -82,10 +83,11 @@ Queue.prototype._pushOneMessage = function() {
   if(!this.push(this.messages.shift())) {
     debug("Downstream backpressure detected");
   }
+  debug("Internal messages length: " + this.messages.length);
 }
 
 Queue.prototype._read = function(s) {
-  debug("System called _read");
+  systemDebug("System called _read");
   var me = this;
   if(_.isEmpty(this.messages)) {
     if(!this.fetcher.running) {
@@ -175,14 +177,15 @@ Sink.prototype.onDeleteError = function(f) {
 
 
 
-/* Fetcher*/
+/* Fetcher */
 
 inherits(Fetcher, EventEmitter);
 
-function Fetcher (fetch, interval) {
-  this.interval = interval;
+function Fetcher (fetch, concurrentRequestLimit) {
   this.fetch = fetch;
   this.running = false;
+  this.concurrentRequestLimit = concurrentRequestLimit;
+  this._outstandingRequests = 0;
 }
 
 Fetcher.prototype.start = function() {
@@ -191,19 +194,30 @@ Fetcher.prototype.start = function() {
   debug("Starting fetcher");
   if(!this.__i && !this.shuttingDown) {
     this.__i = setInterval(function() {
-      me.fetch(function(err, results) {
-        if(err) {
-          debug("Error in fetch: " + err.message);
-          return me.emit("error", err);
-        }
-        me.emit("results", results);
-      });
-    }, this.interval);
+      me._fillConcurrentRequests();
+    }, 5);
   }
 }
 
+Fetcher.prototype._fillConcurrentRequests = function() {
+  var me = this;
+  while(this._outstandingRequests < this.concurrentRequestLimit) {
+    fetcherDebug("Fetching. Outstanding requests: " + this._outstandingRequests);
+    me.fetch(function(err, results) {
+      me._outstandingRequests--;
+      if(err) {
+        fetcherDebug("Error in fetch: " + err.message);
+        return me.emit("error", err);
+      }
+      fetcherDebug("Successful fetch");
+      me.emit("results", results);
+    });
+    this._outstandingRequests++;
+  }
+};
+
 Fetcher.prototype.stop = function() {
-  debug("Stopping fetcher")
+  fetcherDebug("Stopping fetcher")
   this.running = false;
   if(this.__i) {
     clearInterval(this.__i);
@@ -212,6 +226,7 @@ Fetcher.prototype.stop = function() {
 };
 
 Fetcher.prototype.shutdown = function() {
+  fetcherDebug("Shutting down");
   this.shuttingDown = true;
   this.stop();
 }
@@ -234,7 +249,12 @@ exports.parseJson = function(ironmqStream, onParseError) {
             .pipe(parsedStream);
 };
 
-
 exports.useStub = function(stub) {
   IronMQ = stub;
 };
+
+var removeAndReturn = function(obj, prop) {
+  var p = obj[prop];
+  delete obj[prop];
+  return p;
+}; 
