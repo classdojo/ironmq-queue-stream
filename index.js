@@ -202,7 +202,7 @@ Sink.prototype._write = function(message, enc, next) {
         //readd back to _toDelete queue?
         me.emit("deleteError", err, deletingMessages);
       }
-      debug("Deleted messages: ", deletingMessages.length);
+      debug("Deleted " + deletingMessages.length + " messages");
       me.emit("deleted", deletingMessages);
       next();
     });
