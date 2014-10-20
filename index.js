@@ -176,7 +176,7 @@ function Sink(ironmqQueue, options) {
   };
   Stream.Writable.call(this, _.merge(defaultOptions, options.stream));
   this.q = ironmqQueue.q;
-  this._deleteInBatchesOf = options.deleteInBatchesOf;
+  this._deleteInBatchesOf = options.deleteInBatchesOf || 1;
   this._toDelete = [];
 }
 
@@ -190,6 +190,7 @@ Sink.prototype._write = function(message, enc, next) {
   this._toDelete.push(message);
   if(this._toDelete.length < this._deleteInBatchesOf) {
     this._toDelete.push(message);
+    next();
   } else {
     //slice up to batch number off
     deletingMessages = _.first(this._toDelete, this._deleteInBatchesOf).map(function(message) {
@@ -206,14 +207,6 @@ Sink.prototype._write = function(message, enc, next) {
       next();
     });
   }
-  // this.q.del(message.id, function(err) {
-  //   if(err) {
-  //     me.emit("deleteError", err);
-  //   }
-  //   debug("Deleted message: " + message.id);
-  //   me.emit("deleted", message.id);
-  //   next();
-  // });
 };
 
 Sink.prototype.onDeleteError = function(f) {
