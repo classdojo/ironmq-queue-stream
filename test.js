@@ -60,29 +60,88 @@ var getQueueMessages = function(queue) {
 };
 
 describe("Fetcher", function() {
+  var fetcher;
+
+  beforeEach(function() {
+    fetcher = new Iron.Fetcher();
+  });
   describe("#start", function() {
-    it("sets this.running to true");
+    it("sets this.running to true", function() {
+      fetcher.start();
+      expect(fetcher.running).to.be(true);
+    });
 
-    it("calls fetch at the given interval");
+    it("does not attempt to issue requests if the fetcher is shutting down", function() {
+      fetcher.shuttingDown = true;
+      fetcher.start();
+      expect(fetcher.__i).to.not.be.ok();
+    });
 
-    it("emits an `error` event if fetch returns an error");
+  });
 
-    it("emits a `results` event if fetch returns results");
+  describe("#_fetch", function() {
+    it("calls the fetch function no more than the concurrent request limit", function() {
+      var count = 0;
+      fetcher = new Iron.Fetcher(function() {count++;}, 10);
+      fetcher._fetch();
+      expect(count).to.be(10);
+    });
 
+    it("emits `error` if the fetch returns an error", function(done) {
+      var fetch = function(cb) {
+        setTimeout(function() {
+          cb(new Error());
+          expectation.verify();
+          done();
+        }, 5);
+
+      };
+      fetcher = new Iron.Fetcher(fetch, 1);
+      var mock = sinon.mock(fetcher);
+      var expectation = mock
+                    .expects("emit")
+                    .once()
+                    .withArgs("error");
+      fetcher._fetch();
+    });
   });
 
   describe("#stop", function() {
-    it("sets this.running to false");
+    it("sets this.running to false", function() {
+      fetcher.stop();
+      expect(fetcher.running).to.be(false);
+    });
 
-    it("clears __i interval if defined");
+    it("clears __i interval if defined", function() {
+      var spy = sinon.spy();
+      var oldClearInterval = clearInterval;
+      clearInterval = spy;
+      fetcher.__i = setInterval(function(){}, 100);
+      fetcher.stop();
+      expect(spy.called).to.be(true);
+      clearInterval = oldClearInterval;
+      clearInterval(fetcher.__i);
+    });
 
-    it("nullifies __i if defined");
+    it("nullifies __i if defined", function() {
+      fetcher.__i = setInterval(function(){}, 100);
+      fetcher.stop();
+      expect(fetcher.__i).to.not.be.ok();
+    });
   });
 
   describe("#shutdown", function() {
-    it("sets this.shuttingDown");
+    it("sets this.shuttingDown", function() {
+      fetcher.shutdown();
+      expect(fetcher.shuttingDown).to.be(true);
+    });
 
-    it("calls this.stop");
+    it("calls this.stop", function() {
+      var spy = sinon.spy();
+      fetcher.stop = spy;
+      fetcher.shutdown();
+      expect(spy.called).to.be(true);
+    });
   });
 })
 
@@ -96,18 +155,34 @@ describe("Queue", function() {
     queue.q.setMessages([{body: "hello"}, {body: "world"}]);
   });
 
-  it("initializes a fetcher");
+  it("initializes a fetcher", function() {
+    expect(queue.fetcher).to.be.a(Iron.Fetcher);
+  });
 
-  it("adds a default results handler to fetcher");
+  it("adds a default results handler to fetcher", function() {
+    expect(queue.fetcher.listeners("results")).to.have.length(1);
+  });
 
-  it("adds a default error handler to fetcher");
+  it("adds a default error handler to fetcher", function() {
+    expect(queue.fetcher.listeners("error")).to.have.length(1)
+  });
 
-  describe("#firstMessageListener", function() {
-    it("calls _pushOneMessage() when results are not empty");
+  describe("receiving messages", function() {
+    var spy;
 
-    it("calls fetcher#stop if only one result is passed in");
+    var sendMessages = function(messages) {
+      queue.fetcher.emit("results", messages);
+    };
 
-    it("does not call fetcher#stop if more than one result is passed in");
+    it("adds the messages to the internal queue");
+
+    describe("when the first request with results is received", function() {
+      it("pushes the first result downstream");
+
+      it("does not stop the fetcher if the internal message queue is empty after the first push");
+
+      it("stops the fetcher if the internal message queue is not empty after the first push");
+    });
   });
 
   describe("#_read", function() {

@@ -31,19 +31,19 @@ function IronStream(config) {
 /*
  * @param name {String}: Name of the queue to connect to
  * @param options {Object}:
-          options.concurrentRequests {Num} - Interval with which to check ironMQ in ms.
-          options.maxMessagesPerEvent {Num} - The maximum number of messages to return in any given push.
+
+        options.ironmq.concurrentRequests {Num} - Number of fetch requests to issue in parallel. Once a fetch
+                                           returns results all outstanding requests are completed and
+                                           no fetches are issued until the internal fetch queue is
+                                           pushed downstream.
+        options.ironmq.* {Num} - Any set of options accepted by the ironmq npm client. https://www.npmjs.org/package/iron_mq
+
+        options.stream.*  - Any set of options accepted by Stream.Readable. Will override defaults.
+
 */
 
 
 IronStream.prototype.queue = function(name, options) {
-  if(options.maxMessagesPerEvent) {
-    options.n = removeAndReturn(options, "maxMessagesPerEvent");
-  }
-  var options = _.merge({
-      concurrentRequests: 5,
-      n: 10
-    }, (options || {}));
   this.queues[name] = this.queues[name]
     || new Queue(this, name, options);
   return this.queues[name];
@@ -52,13 +52,23 @@ IronStream.prototype.queue = function(name, options) {
 
 function Queue(ironStream, name, options) {
   var me = this;
-  Stream.Readable.call(this, {objectMode: true});
+  var defaultOptions = {
+    ironmq: {
+      concurrentRequests: 5,
+      n: 10
+    },
+    stream: {
+      objectMode: true
+    }
+  };
+  var options = _.merge(defaultOptions, (options || {}));
+  Stream.Readable.call(this, _.extend(options.stream));
   this.name = name;
   this.options = options;
   this.q = ironStream.MQ.queue(name);
   this.running = true;
   this.messages = [];
-  this.fetcher = new Fetcher(me.q.get.bind(me.q, options), removeAndReturn(options, "concurrentRequests"));
+  this.fetcher = new Fetcher(me.q.get.bind(me.q, options.ironmq), removeAndReturn(options.ironmq, "concurrentRequests"));
 
   /* add default fetcher handlers */
   this.fetcher.on("results", function(results) {
@@ -72,6 +82,7 @@ function Queue(ironStream, name, options) {
   this.firstMessageListener = function(results) {
     if(!_.isEmpty(results)) {
       me._pushOneMessage();
+      console.log("Messages", me.messages);
       if(!_.isEmpty(me.messages)) me.fetcher.stop();
     }
   };
@@ -163,7 +174,7 @@ Sink.prototype._write = function(message, enc, next) {
   }
   this.q.del(message.id, function(err) {
     if(err) {
-      this.emit("deleteError", err);
+      me.emit("deleteError", err);
     }
     debug("Deleted message: " + message.id);
     me.emit("deleted", message.id);
@@ -181,6 +192,8 @@ Sink.prototype.onDeleteError = function(f) {
 
 inherits(Fetcher, EventEmitter);
 
+
+/* fetch should by asynchronous. */
 function Fetcher (fetch, concurrentRequestLimit) {
   this.fetch = fetch;
   this.running = false;
@@ -194,15 +207,16 @@ Fetcher.prototype.start = function() {
   debug("Starting fetcher");
   if(!this.__i && !this.shuttingDown) {
     this.__i = setInterval(function() {
-      me._fillConcurrentRequests();
+      me._fetch();
     }, 5);
   }
 }
 
-Fetcher.prototype._fillConcurrentRequests = function() {
+Fetcher.prototype._fetch = function() {
   var me = this;
   while(this._outstandingRequests < this.concurrentRequestLimit) {
     fetcherDebug("Fetching. Outstanding requests: " + this._outstandingRequests);
+    this._outstandingRequests++;
     me.fetch(function(err, results) {
       me._outstandingRequests--;
       if(err) {
@@ -212,7 +226,6 @@ Fetcher.prototype._fillConcurrentRequests = function() {
       fetcherDebug("Successful fetch");
       me.emit("results", results);
     });
-    this._outstandingRequests++;
   }
 };
 
@@ -236,6 +249,7 @@ Fetcher.prototype.shutdown = function() {
 exports.IronStream = IronStream;
 exports.Queue = Queue;
 exports.Sink = Sink;
+exports.Fetcher = Fetcher;
 
 /*
   @param ironmqStream {Stream} A configured ironmq stream.
