@@ -160,9 +160,15 @@ Queue.prototype.resetMessages = function() {
 
  @param instance of IronStream.Queue.  This is returned when .queue()
         is invoked on an instantiated IronStream object.
+
+  @param options {Object} Any options accepted by node Stream.Writable
 */
-function Sink(ironmqQueue) {
-  Stream.Writable.call(this, {objectMode: true, decodeStrings: false});
+function Sink(ironmqQueue, options) {
+  var defaultOptions = {
+    objectMode: true,
+    decodeStrings: false
+  };
+  Stream.Writable.call(this, _.merge(defaultOptions, options));
   this.q = ironmqQueue.q;
 }
 
@@ -256,9 +262,10 @@ exports.Fetcher = Fetcher;
   @param onParseError {Function} Called when there's a parsing error.
 */
 
-exports.parseJson = function(ironmqStream, onParseError) {
-  var parsedStream = new JsonParser({parseField: "body", enrichWith: ["id"]});
-  parsedStream.on("parseError", onParseError || function() {});
+exports.parseJson = function(ironmqStream, options) {
+  options = optinos || {};
+  var parsedStream = new JsonParser(_.merge({parseField: "body", enrichWith: ["id"]}, options));
+  parsedStream.on("parseError", options.onParseError || function() {});
   return ironmqStream
             .pipe(parsedStream);
 };

@@ -22,11 +22,14 @@ inherits(JsonParser, Transform);
                 key specified by the String
       Object - simply merged into parsed object at the top level.
 
+    stream: {Object} any options accepted by Stream.Transfrom
+
 */
 function JsonParser(opts) {
   //use simple through function
-  this.opts = opts || {};
-  Transform.call(this, {objectMode: true, decodeStrings: false});
+  opts = opts || {};
+  this.opts = opts;
+  Transform.call(this, _.merge({objectMode: true, decodeStrings: false}, opts.stream));
 }
 
 /*
