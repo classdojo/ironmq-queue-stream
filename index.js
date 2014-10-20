@@ -82,7 +82,6 @@ function Queue(ironStream, name, options) {
   this.firstMessageListener = function(results) {
     if(!_.isEmpty(results)) {
       me._pushOneMessage();
-      console.log("Messages", me.messages);
       if(!_.isEmpty(me.messages)) me.fetcher.stop();
     }
   };
@@ -263,7 +262,7 @@ exports.Fetcher = Fetcher;
 */
 
 exports.parseJson = function(ironmqStream, options) {
-  options = optinos || {};
+  options = options || {};
   var parsedStream = new JsonParser(_.merge({parseField: "body", enrichWith: ["id"]}, options));
   parsedStream.on("parseError", options.onParseError || function() {});
   return ironmqStream
