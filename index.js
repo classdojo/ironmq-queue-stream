@@ -161,30 +161,59 @@ Queue.prototype.resetMessages = function() {
         is invoked on an instantiated IronStream object.
 
   @param options {Object} Any options accepted by node Stream.Writable
+
+
+    options.deleteInBatchesOf:  {Num} Messages will be deleted in batches of this much. DEFAULT is 1
+    options.stream.*            Any options accepted by node Stream.Writable
+
+
+
 */
 function Sink(ironmqQueue, options) {
   var defaultOptions = {
     objectMode: true,
     decodeStrings: false
   };
-  Stream.Writable.call(this, _.merge(defaultOptions, options));
+  Stream.Writable.call(this, _.merge(defaultOptions, options.stream));
   this.q = ironmqQueue.q;
+  this._deleteInBatchesOf = options.deleteInBatchesOf;
+  this._toDelete = [];
 }
 
 
 Sink.prototype._write = function(message, enc, next) {
+  var deletingMessages;
   var me = this;
   if(!message.id) {
     return this.emit("deleteError", new Error("Message does not have an `id` property"), message);
   }
-  this.q.del(message.id, function(err) {
-    if(err) {
-      me.emit("deleteError", err);
-    }
-    debug("Deleted message: " + message.id);
-    me.emit("deleted", message.id);
-    next();
-  });
+  this._toDelete.push(message);
+  if(this._toDelete.length < this._deleteInBatchesOf) {
+    this._toDelete.push(message);
+  } else {
+    //slice up to batch number off
+    deletingMessages = _.first(this._toDelete, this._deleteInBatchesOf).map(function(message) {
+      return message.id;
+    });
+    this._toDelete = _.rest(this._toDelete, this._deleteInBatchesOf);
+    this.q.del_multiple(deletingMessages, function(err) {
+      if(err) {
+        //readd back to _toDelete queue?
+        me.emit("deleteError", err, deletingMessages);
+      }
+      debug("Deleted messages: ", deletingMessages.length);
+      me.emit("deleted", deletingMessages);
+      next();
+    });
+  }
+  // this.q.del(message.id, function(err) {
+  //   if(err) {
+  //     me.emit("deleteError", err);
+  //   }
+  //   debug("Deleted message: " + message.id);
+  //   me.emit("deleted", message.id);
+  //   next();
+  // });
 };
 
 Sink.prototype.onDeleteError = function(f) {
