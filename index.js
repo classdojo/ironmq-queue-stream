@@ -188,11 +188,9 @@ Sink.prototype._write = function(message, enc, next) {
     return this.emit("deleteError", new Error("Message does not have an `id` property"), message);
   }
   this._toDelete.push(message);
-  if(this._toDelete.length < this._deleteInBatchesOf) {
-    this._toDelete.push(message);
-    me.emit("deletePending", message.id);
-    next();
-  } else {
+  this._toDelete.push(message);
+  me.emit("deletePending", message.id);
+  if(this._toDelete.length === this._deleteInBatchesOf) {
     //slice up to batch number off
     deletingMessages = _.first(this._toDelete, this._deleteInBatchesOf).map(function(message) {
       return message.id;
@@ -206,7 +204,8 @@ Sink.prototype._write = function(message, enc, next) {
       debug("Deleted " + deletingMessages.length + " messages");
       me.emit("deleted", deletingMessages);
       next();
-    });
+  } else {
+    next();
   }
 };
 
