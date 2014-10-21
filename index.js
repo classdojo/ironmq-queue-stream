@@ -204,6 +204,7 @@ Sink.prototype._write = function(message, enc, next) {
       debug("Deleted " + deletingMessages.length + " messages");
       me.emit("deleted", deletingMessages);
       next();
+    });
   } else {
     next();
   }
