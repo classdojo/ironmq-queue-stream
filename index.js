@@ -190,6 +190,7 @@ Sink.prototype._write = function(message, enc, next) {
   this._toDelete.push(message);
   if(this._toDelete.length < this._deleteInBatchesOf) {
     this._toDelete.push(message);
+    me.emit("deletePending", message.id);
     next();
   } else {
     //slice up to batch number off
