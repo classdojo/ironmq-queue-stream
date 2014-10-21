@@ -68,8 +68,6 @@ function Queue(ironStream, name, options) {
   this.q = ironStream.MQ.queue(name);
   this.running = true;
   this.messages = [];
-  // this.fetcher = new Fetcher(me.q.get.bind(me.q, options.ironmq), removeAndReturn(options.ironmq, "concurrentRequests"));
-  console.log("FETCHER HANDLER");
   this.fetcher = new Fetcher2(me.q.get.bind(me.q, options.ironmq), 100);
 }
 
@@ -282,6 +280,7 @@ Fetcher2.prototype.start = function(onDone) {
 
 
 Fetcher2.prototype._fetch = function(onDone) {
+  var me = this;
   if(this._outstandingRequests < 2) {
     this._outstandingRequests++;
     this.fetch(function(err, results) {
@@ -294,12 +293,12 @@ Fetcher2.prototype._fetch = function(onDone) {
       me._results = me._results.concat(results);
       me._outstandingRequests--;
       //are we above minimumResultSize?
-      fetcherDebug("Received fetch. " + me._outstandingRequests + " outstanding fetches.");
+      fetcherDebug("Received fetch. Total results: " + me._results.length + ". Outstanding fetches: " + me._outstandingRequests);
       if(me._results.length > me.minimumResultSize) {
-        if(this.running) {
+        if(me.running) {
           fetcherDebug("First fetch desired limit received");
           //first request that's gotten us above request size.
-          fetcher.stop();
+          me.stop();
         }
         if(me._outstandingRequests == 0) {
           //last outstanding request after which we're above minimumResultSize
@@ -318,6 +317,7 @@ Fetcher2.prototype.stop = function() {
   this.running = false;
   if(this.__i) {
     clearInterval(this.__i);
+    this.__i = null;
   }
 }
 
