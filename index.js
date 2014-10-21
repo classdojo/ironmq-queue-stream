@@ -68,23 +68,20 @@ function Queue(ironStream, name, options) {
   this.q = ironStream.MQ.queue(name);
   this.running = true;
   this.messages = [];
-  this.fetcher = new Fetcher(me.q.get.bind(me.q, options.ironmq), removeAndReturn(options.ironmq, "concurrentRequests"));
+  // this.fetcher = new Fetcher(me.q.get.bind(me.q, options.ironmq), removeAndReturn(options.ironmq, "concurrentRequests"));
+  this.fetcher = new Fetcher2(me.q.get.bind(me.q, options.ironmq), 100);
 
   /* add default fetcher handlers */
-  this.fetcher.on("results", function(results) {
-    if(!_.isEmpty(results)) {
-      me._addMessagesToQueue(results);
-    }
-  });
-  this.fetcher.on("error", function(err) {
-    me.emit("queueError", err);
-  });
-  this.firstMessageListener = function(results) {
-    if(!_.isEmpty(results)) {
-      me._pushOneMessage();
-      if(!_.isEmpty(me.messages)) me.fetcher.stop();
-    }
-  };
+  // this.fetcher.on("results", function(results) {
+  //   if(!_.isEmpty(results)) {
+  //     me._addMessagesToQueue(results);
+  //     //push first message downstream to tell node
+  //     //to continue calling read
+  //   }
+  // });
+  // this.fetcher.on("error", function(err) {
+  //   me.emit("queueError", err);
+  // });
 }
 
 
@@ -96,19 +93,21 @@ Queue.prototype._pushOneMessage = function() {
   debug("Internal messages length: " + this.messages.length);
 }
 
-Queue.prototype._read = function(s) {
+Queue.prototype._read = function() {
   systemDebug("System called _read");
   var me = this;
   if(_.isEmpty(this.messages)) {
     if(!this.fetcher.running) {
-      this.fetcher.start();
+      this.fetcher.start(function(err, messages) {
+        if(err) {
+          return me.emit("queueError", err);
+        }
+        me._addMessagesToQueue(messages);
+        me._pushOneMessage();
+      });
     }
-    this.fetcher.once("results", this.firstMessageListener);
   } else {
-    if(this.fetcher.running) {
-      this.fetcher.stop();
-    }
-    me._pushOneMessage();
+    this._pushOneMessage();
   }
 };
 
@@ -120,6 +119,7 @@ Queue.prototype._addMessagesToQueue = function(messages) {
   messages = _.isArray(messages) ? messages : [messages];
   debug("Adding " + messages.length + " messages to queue");
   this.messages = this.messages.concat(messages);
+  debug("Total queue length " + messages.length);
 };
 
 /*
@@ -189,7 +189,7 @@ Sink.prototype._write = function(message, enc, next) {
   }
   this._toDelete.push(message);
   this._toDelete.push(message);
-  me.emit("deletePending", message.id);
+  this.emit("deletePending", message.id);
   if(this._toDelete.length === this._deleteInBatchesOf) {
     //slice up to batch number off
     deletingMessages = _.first(this._toDelete, this._deleteInBatchesOf).map(function(message) {
@@ -221,8 +221,8 @@ Sink.prototype.onDeleteError = function(f) {
 inherits(Fetcher, EventEmitter);
 
 
-/* fetch should by asynchronous. */
-function Fetcher (fetch, concurrentRequestLimit) {
+/* fetch must be asynchronous. */
+function Fetcher(fetch, concurrentRequestLimit) {
   this.fetch = fetch;
   this.running = false;
   this.concurrentRequestLimit = concurrentRequestLimit;
@@ -267,6 +267,67 @@ Fetcher.prototype.stop = function() {
 };
 
 Fetcher.prototype.shutdown = function() {
+  fetcherDebug("Shutting down");
+  this.shuttingDown = true;
+  this.stop();
+}
+
+
+function Fetcher2(fetch, minimumResultSize) {
+  this.fetch = fetch;
+  this.running = false;
+  this.minimumResultSize = minimumResultSize;
+  this._results = [];
+  this._outstandingRequests = 0;
+  this._outstandingRequestsLimit = 5;
+}
+
+Fetcher2.prototype.start = function(onDone) {
+  var me = this;
+  this.running = true;
+  if(!this.__i && !this.shuttingDown) {
+    this.__i = setInterval(me.fetch.bind(me, onDone), 5);
+  }
+};
+
+
+Fetcher2.prototype._fetch = function(onDone) {
+  if(this._outstandingRequests < this._outstandingRequestsLimit) {
+    this._outstandingRequests++;
+    this.fetch(function(err, results) {
+      if(err) {
+        fetcherDebug("Error in fetch: " + err.message + ". Shutting down fetcher and returning.");
+        me.fetch.stop();
+        return onDone(err);
+      }
+      fetcherDebug("Successful fetch");
+      me._results = me._results.concat(results);
+      me._outstandingRequests--;
+      //are we above minimumResultSize?
+      if(me._results.length > me.minimumResultSize) {
+        if(this.running) {
+          //first request that's gotten us above request size.
+          fetcher.stop();
+        }
+        if(me._outstandingRequests == 0) {
+          //last outstanding request after which we're above minimumResultSize
+          var results = me._results;
+          me._results = [];
+          onDone(null, results);
+        }
+      }
+    });
+  }
+};
+
+Fetcher2.prototype.stop = function() {
+  this.running = false;
+  if(this.__i) {
+    clearInterval(this.__i);
+  }
+}
+
+Fetcher2.prototype.shutdown = function() {
   fetcherDebug("Shutting down");
   this.shuttingDown = true;
   this.stop();
