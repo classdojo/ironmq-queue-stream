@@ -69,19 +69,8 @@ function Queue(ironStream, name, options) {
   this.running = true;
   this.messages = [];
   // this.fetcher = new Fetcher(me.q.get.bind(me.q, options.ironmq), removeAndReturn(options.ironmq, "concurrentRequests"));
+  console.log("FETCHER HANDLER");
   this.fetcher = new Fetcher2(me.q.get.bind(me.q, options.ironmq), 100);
-
-  /* add default fetcher handlers */
-  // this.fetcher.on("results", function(results) {
-  //   if(!_.isEmpty(results)) {
-  //     me._addMessagesToQueue(results);
-  //     //push first message downstream to tell node
-  //     //to continue calling read
-  //   }
-  // });
-  // this.fetcher.on("error", function(err) {
-  //   me.emit("queueError", err);
-  // });
 }
 
 
@@ -232,7 +221,7 @@ function Fetcher(fetch, concurrentRequestLimit) {
 Fetcher.prototype.start = function() {
   var me = this;
   this.running = true;
-  debug("Starting fetcher");
+  fetcherDebug("Starting fetcher");
   if(!this.__i && !this.shuttingDown) {
     this.__i = setInterval(function() {
       me._fetch();
@@ -284,15 +273,16 @@ function Fetcher2(fetch, minimumResultSize) {
 
 Fetcher2.prototype.start = function(onDone) {
   var me = this;
+  fetcherDebug("Starting fetcher");
   this.running = true;
   if(!this.__i && !this.shuttingDown) {
-    this.__i = setInterval(me.fetch.bind(me, onDone), 5);
+    this.__i = setInterval(me._fetch.bind(me, onDone), 5);
   }
 };
 
 
 Fetcher2.prototype._fetch = function(onDone) {
-  if(this._outstandingRequests < this._outstandingRequestsLimit) {
+  if(this._outstandingRequests < 2) {
     this._outstandingRequests++;
     this.fetch(function(err, results) {
       if(err) {
@@ -304,13 +294,16 @@ Fetcher2.prototype._fetch = function(onDone) {
       me._results = me._results.concat(results);
       me._outstandingRequests--;
       //are we above minimumResultSize?
+      fetcherDebug("Received fetch. " + me._outstandingRequests + " outstanding fetches.");
       if(me._results.length > me.minimumResultSize) {
         if(this.running) {
+          fetcherDebug("First fetch desired limit received");
           //first request that's gotten us above request size.
           fetcher.stop();
         }
         if(me._outstandingRequests == 0) {
           //last outstanding request after which we're above minimumResultSize
+          fetcherDebug("Last outstanding fetch received. Pushing results");
           var results = me._results;
           me._results = [];
           onDone(null, results);
@@ -321,6 +314,7 @@ Fetcher2.prototype._fetch = function(onDone) {
 };
 
 Fetcher2.prototype.stop = function() {
+  fetcherDebug("Stopping fetcher");
   this.running = false;
   if(this.__i) {
     clearInterval(this.__i);
