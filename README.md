@@ -1,10 +1,11 @@
-# ironmq-queue-stream
+# ironmq-queue-stream (WIP)
 
 ## Tests
 
 ```bash
 make test
 ```
+Test coverage could be better.
 
 
 ## Usage
@@ -14,7 +15,17 @@ IronStream = require("ironmq-queue-stream").IronStream;
 var iron = new IronStream({projectId: "", projectToken: ""});
 
 //initialize a queue for that stream to pull from
-var someQueueStream = iron.queue("someQueue");
+var queueOptions = {
+  ironmq: {
+    n: 100,
+    timeout: THIRTY_MINUTES
+  },
+  stream: {
+    highWaterMark: HIGHWATER_MARK
+  }
+};
+
+var someQueueStream = iron.queue("someQueue", queueOptions);
 
 //pipe that stream to something useful
 someQueueStream.pipe(someOtherStream);
@@ -40,9 +51,16 @@ someQueueStream.pipe(someOtherStream);
   parsing error.
 */
 
-var parsedStream = IronStream.parseJson(queueStream, function(err, message) {
-  console.error(err + " for message " + message);
-});
+var jsonParserOptions = {
+  onError: function(err, message) {
+      console.error("Problem parsing JSON for:", message, "Error:", err);
+  },
+  stream: {
+    highWaterMark: HIGHWATER_MARK
+  }
+};
+
+var parsedStream = IronStream.parseJson(queueStream, jsonParserOptions);
 
 parsedStream.pipe(someOtherStream);
 /*
@@ -66,7 +84,7 @@ parsedStream.pipe(someOtherStream);
 var Sink = require("ironmq-queue-stream").Sink;
 var iron = new IronStream({projectId: "", projectToken: ""});
 var myQueueStream = iron.queue("myQueue");
-sink = new Sink(myQueueStream); //create a Sink for myQueue
+var sink = new IronMQStream.Sink(myQueueStream, {deleteInBatchesOf: 100, stream: {highWaterMark: HIGHWATER_MARK}});
 myQueueStream.pipe(someOtherStream).pipe(sink); //every successful message is deleted from the queue.
 ```
 

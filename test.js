@@ -66,82 +66,15 @@ describe("Fetcher", function() {
     fetcher = new Iron.Fetcher();
   });
   describe("#start", function() {
-    it("sets this.running to true", function() {
-      fetcher.start();
-      expect(fetcher.running).to.be(true);
-    });
-
-    it("does not attempt to issue requests if the fetcher is shutting down", function() {
-      fetcher.shuttingDown = true;
-      fetcher.start();
-      expect(fetcher.__i).to.not.be.ok();
-    });
-
   });
 
   describe("#_fetch", function() {
-    it("calls the fetch function no more than the concurrent request limit", function() {
-      var count = 0;
-      fetcher = new Iron.Fetcher(function() {count++;}, 10);
-      fetcher._fetch();
-      expect(count).to.be(10);
-    });
-
-    it("emits `error` if the fetch returns an error", function(done) {
-      var fetch = function(cb) {
-        setTimeout(function() {
-          cb(new Error());
-          expectation.verify();
-          done();
-        }, 5);
-
-      };
-      fetcher = new Iron.Fetcher(fetch, 1);
-      var mock = sinon.mock(fetcher);
-      var expectation = mock
-                    .expects("emit")
-                    .once()
-                    .withArgs("error");
-      fetcher._fetch();
-    });
   });
 
   describe("#stop", function() {
-    it("sets this.running to false", function() {
-      fetcher.stop();
-      expect(fetcher.running).to.be(false);
-    });
-
-    it("clears __i interval if defined", function() {
-      var spy = sinon.spy();
-      var oldClearInterval = clearInterval;
-      clearInterval = spy;
-      fetcher.__i = setInterval(function(){}, 100);
-      fetcher.stop();
-      expect(spy.called).to.be(true);
-      clearInterval = oldClearInterval;
-      clearInterval(fetcher.__i);
-    });
-
-    it("nullifies __i if defined", function() {
-      fetcher.__i = setInterval(function(){}, 100);
-      fetcher.stop();
-      expect(fetcher.__i).to.not.be.ok();
-    });
   });
 
   describe("#shutdown", function() {
-    it("sets this.shuttingDown", function() {
-      fetcher.shutdown();
-      expect(fetcher.shuttingDown).to.be(true);
-    });
-
-    it("calls this.stop", function() {
-      var spy = sinon.spy();
-      fetcher.stop = spy;
-      fetcher.shutdown();
-      expect(spy.called).to.be(true);
-    });
   });
 })
 
@@ -151,7 +84,7 @@ describe("Queue", function() {
   beforeEach(function() {
     Iron.useStub(Stub);
     iron = IronStream(config);
-    queue = iron.queue("someQueue", {checkEvery: CHECK_EVERY, maxMessagesPerEvent: 1});
+    queue = iron.queue("someQueue", {ironmq: {}, stream: {}});
     queue.q.setMessages([{body: "hello"}, {body: "world"}]);
   });
 
@@ -159,13 +92,6 @@ describe("Queue", function() {
     expect(queue.fetcher).to.be.a(Iron.Fetcher);
   });
 
-  it("adds a default results handler to fetcher", function() {
-    expect(queue.fetcher.listeners("results")).to.have.length(1);
-  });
-
-  it("adds a default error handler to fetcher", function() {
-    expect(queue.fetcher.listeners("error")).to.have.length(1)
-  });
 
   describe("receiving messages", function() {
     var spy;
@@ -258,7 +184,7 @@ describe("Sink", function() {
   beforeEach(function() {
     Iron.useStub(Stub);
     var iron = new IronStream(config);
-    ironQueue = iron.queue("someQueue", {checkEvery: 100, maxMessagesPerEvent: 1});
+    ironQueue = iron.queue("someQueue", {ironmq: {}, stream: {}});
   });
 
   it("emits a deleteError event if the message does not have an id field", function() {
@@ -274,38 +200,9 @@ describe("Sink", function() {
     mock.restore();
   });
 
-  it("it should call delete on the queue when a job contains an id", function() {
-    var message = {id: "123", message: "some Message"};
-    mock = sinon.mock(ironQueue.q); //stub the internal queue lib.
-    expectation = mock
-                    .expects("del")
-                    .once()
-                    .withArgs("123");
-    sink = new IronSink(ironQueue);
-    sink._write(message, "utf-8", function() {});
-    expectation.verify();
-    mock.restore();
-  });
+  it("it should call delete on the queue when a job contains an id");
 
-  it("emits a delete event if the message is properly deleted", function(done) {
-    var message = {id: "123", message: "some Message"};
-
-    sink = new IronSink(ironQueue);
-    stub = sinon.stub(sink.q, "del")
-              .onFirstCall()
-              .yields(null);
-
-    mock = sinon.mock(sink);
-    expectation = mock
-                    .expects("emit")
-                    .once()
-                    .withArgs("deleted");
-    sink._write(message, "utf-8", function() {
-      expectation.verify();
-      mock.restore();
-      done();
-    });
-  });
+  it("emits a delete event if the message is properly deleted");
 
 });
 

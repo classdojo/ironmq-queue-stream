@@ -36,7 +36,7 @@ function IronStream(config) {
                                            returns results all outstanding requests are completed and
                                            no fetches are issued until the internal fetch queue is
                                            pushed downstream.
-        options.ironmq.* {Num} - Any set of options accepted by the ironmq npm client. https://www.npmjs.org/package/iron_mq
+        options.ironmq.*  - Any set of options accepted by the ironmq npm client. https://www.npmjs.org/package/iron_mq
 
         options.stream.*  - Any set of options accepted by Stream.Readable. Will override defaults.
 
@@ -68,7 +68,7 @@ function Queue(ironStream, name, options) {
   this.q = ironStream.MQ.queue(name);
   this.running = true;
   this.messages = [];
-  this.fetcher = new Fetcher2(me.q.get.bind(me.q, options.ironmq), 100);
+  this.fetcher = new Fetcher(me.q.get.bind(me.q, options.ironmq), 100);
 }
 
 
@@ -161,6 +161,9 @@ function Sink(ironmqQueue, options) {
     objectMode: true,
     decodeStrings: false
   };
+  if(!options) {
+    options = {stream: {}}
+  }
   Stream.Writable.call(this, _.merge(defaultOptions, options.stream));
   this.q = ironmqQueue.q;
   this._deleteInBatchesOf = options.deleteInBatchesOf || 1;
@@ -208,59 +211,7 @@ Sink.prototype.onDeleteError = function(f) {
 inherits(Fetcher, EventEmitter);
 
 
-/* fetch must be asynchronous. */
-function Fetcher(fetch, concurrentRequestLimit) {
-  this.fetch = fetch;
-  this.running = false;
-  this.concurrentRequestLimit = concurrentRequestLimit;
-  this._outstandingRequests = 0;
-}
-
-Fetcher.prototype.start = function() {
-  var me = this;
-  this.running = true;
-  fetcherDebug("Starting fetcher");
-  if(!this.__i && !this.shuttingDown) {
-    this.__i = setInterval(function() {
-      me._fetch();
-    }, 5);
-  }
-}
-
-Fetcher.prototype._fetch = function() {
-  var me = this;
-  while(this._outstandingRequests < this.concurrentRequestLimit) {
-    fetcherDebug("Fetching. Outstanding requests: " + this._outstandingRequests);
-    this._outstandingRequests++;
-    me.fetch(function(err, results) {
-      me._outstandingRequests--;
-      if(err) {
-        fetcherDebug("Error in fetch: " + err.message);
-        return me.emit("error", err);
-      }
-      fetcherDebug("Successful fetch");
-      me.emit("results", results);
-    });
-  }
-};
-
-Fetcher.prototype.stop = function() {
-  fetcherDebug("Stopping fetcher")
-  this.running = false;
-  if(this.__i) {
-    clearInterval(this.__i);
-    this.__i = null;
-  }
-};
-
-Fetcher.prototype.shutdown = function() {
-  fetcherDebug("Shutting down");
-  this.shuttingDown = true;
-  this.stop();
-}
-
-
-function Fetcher2(fetch, minimumResultSize) {
+function Fetcher(fetch, minimumResultSize) {
   this.fetch = fetch;
   this.running = false;
   this.minimumResultSize = minimumResultSize;
@@ -269,7 +220,7 @@ function Fetcher2(fetch, minimumResultSize) {
   this._outstandingRequestsLimit = 5;
 }
 
-Fetcher2.prototype.start = function(onDone) {
+Fetcher.prototype.start = function(onDone) {
   var me = this;
   fetcherDebug("Starting fetcher");
   this.running = true;
@@ -279,7 +230,7 @@ Fetcher2.prototype.start = function(onDone) {
 };
 
 
-Fetcher2.prototype._fetch = function(onDone) {
+Fetcher.prototype._fetch = function(onDone) {
   var me = this;
   if(this._outstandingRequests < 2) {
     this._outstandingRequests++;
@@ -312,7 +263,7 @@ Fetcher2.prototype._fetch = function(onDone) {
   }
 };
 
-Fetcher2.prototype.stop = function() {
+Fetcher.prototype.stop = function() {
   fetcherDebug("Stopping fetcher");
   this.running = false;
   if(this.__i) {
@@ -321,7 +272,7 @@ Fetcher2.prototype.stop = function() {
   }
 }
 
-Fetcher2.prototype.shutdown = function() {
+Fetcher.prototype.shutdown = function() {
   fetcherDebug("Shutting down");
   this.shuttingDown = true;
   this.stop();
